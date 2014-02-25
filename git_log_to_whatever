@@ -1,0 +1,79 @@
+#!/usr/bin/env perl
+
+#
+# Bitch.
+#
+
+use Modern::Perl;
+
+#
+# Dependencies.
+#
+
+use DateTime;
+use DateTime::Format::Epoch;
+
+use JSON::XS;
+use YAML::XS qw( Dump );
+
+#
+# Core.
+#
+
+my $days = 28;
+
+my @commits = day_wise_commits ( $days );
+
+#say STDERR $_->{ymd} . " : " . sprintf ( '%02d', $_->{count} ) . " -- " . $_->{dow} for reverse @commits;
+
+print + JSON::XS->new->pretty(1)->encode ( \@commits );
+
+#
+# Subs.
+#
+
+sub day_wise_commits {
+  my ( $days ) = @_;
+
+  my $dt0       = DateTime->new ( year => 1970, month => 1, day => 1 );
+  my $formatter = DateTime::Format::Epoch->new ( epoch => $dt0 );
+
+  open my $fh, qq{ git log --since="$days days ago" --until="now" --format="%h,%aN,%ct,%s" | } or die;
+
+  my $h;
+
+  while ( <$fh> ) {
+    chomp;
+
+    my ( $hash, $author, $epoch, $message ) = split ',', $_;
+
+    my $dt = $formatter->parse_datetime ( $epoch );
+
+    push @{$h->{$dt->ymd}->{commits}}, {
+      hash    => $hash,
+      author  => $author,
+      message => $message,
+      epoch   => $epoch,
+      iso8601 => $dt->iso8601,
+    };
+  }
+
+  {
+    my $dt = DateTime->now;
+    
+    for ( 1 .. $days ) {    
+      my $ymd = $dt->ymd;
+
+      $h->{$ymd}->{dow} = $dt->day_name;
+
+      $dt->add ( days => -1 );
+    }
+  }
+
+  return @commits = map { {
+    ymd     => $_, 
+    dow     => $h->{$_}->{dow},
+    count   => $h->{$_}->{commits} ? scalar @{$h->{$_}->{commits}} : 0,
+   #commits => $h->{$_}->{commits},
+  } } sort keys %$h;
+}
