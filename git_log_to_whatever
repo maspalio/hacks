@@ -10,22 +10,34 @@ use Modern::Perl;
 # Dependencies.
 #
 
+use Getopt::Long;
+
 use DateTime;
 use DateTime::Format::Epoch;
+
+use LWP::UserAgent;
 
 use JSON::XS;
 use YAML::XS qw( Dump );
 
 #
+# Options.
+#
+
+my $usage = 'Usage: git_log_to_whatever --url $url [--days 28]';
+
+my %option;
+GetOptions ( \%option, map { "$_=s" } qw( days url ) ) and $option{url} or die $usage;
+
+#
 # Core.
 #
 
-my $days = 28;
+my $days = $option{days} //= 28;
 
-my @commits = day_wise_commits ( $days );
+my @commits = day_wise_commits ( $option{url}, $days );
 
 #say STDERR $_->{ymd} . " : " . sprintf ( '%02d', $_->{count} ) . " -- " . $_->{dow} for reverse @commits;
-
 print + JSON::XS->new->pretty(1)->encode ( \@commits );
 
 #
@@ -33,20 +45,35 @@ print + JSON::XS->new->pretty(1)->encode ( \@commits );
 #
 
 sub day_wise_commits {
-  my ( $days ) = @_;
+  my ( $url, $days ) = @_;
   
-  my $h = fill_in ( $days => rip_log ( $days ) );
+  my $h;
 
-  return map { {
-    ymd     => $_, 
-    dow     => $h->{$_}->{dow},
-    count   => $h->{$_}->{commits} ? scalar @{$h->{$_}->{commits}} : 0,
-   #commits => $h->{$_}->{commits},
-  } } sort keys %$h;
+  if ( $url =~ / ^ https:\/\/github\.com\/ /x ) {
+    $h = rip_hub ( $url, $days );
+  }
+  else {
+    $h = rip_log ( $url, $days );
+  }
+
+  if ( $h ) {
+    $h = fill_in ( $days );
+
+    return map { {
+      ymd     => $_, 
+      dow     => $h->{$_}->{dow},
+      count   => $h->{$_}->{commits} ? scalar @{$h->{$_}->{commits}} : 0,
+     #commits => $h->{$_}->{commits},
+    } } sort keys %$h;
+  }
+
+  return;
 }
 
 sub rip_log {
-  my ( $days ) = @_;
+  my ( $url, $days ) = @_;
+
+  chdir $url or die;
 
   my $days_less_one = $days - 1;
 
@@ -88,4 +115,30 @@ sub fill_in {
   }
 
   return $h;
+}
+
+sub rip_hub {
+  my ( $url, $days ) = @_;
+
+  if ( my ( $owner, $repository ) = ( $url =~ m,^ https://github\.com/ ([^/]+) / ([^/]+) \.git $,x ) ) {
+    my $d = $days // 28;
+    
+    my $dt = DateTime->now;
+    if ( $d ) {
+      $dt->add ( days => - $d );
+    }
+    
+    my $ua       = LWP::UserAgent->new;
+    my $request  = HTTP::Request->new ( GET => "https://api.github.com/repos/$owner/$repository/commits" . ( $d ? "?since=" . $dt->iso8601 : "" ) );
+    my $response = $ua->request ( $request );
+
+    if ( $response->is_success ) {
+      return decode_json ( $response->content );
+    }
+    else {
+      die $response->status_line;
+    }
+  }
+
+  return;
 }
