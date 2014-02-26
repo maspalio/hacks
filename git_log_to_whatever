@@ -35,6 +35,19 @@ print + JSON::XS->new->pretty(1)->encode ( \@commits );
 sub day_wise_commits {
   my ( $days ) = @_;
   
+  my $h = fill_in ( $days => rip_log ( $days ) );
+
+  return map { {
+    ymd     => $_, 
+    dow     => $h->{$_}->{dow},
+    count   => $h->{$_}->{commits} ? scalar @{$h->{$_}->{commits}} : 0,
+   #commits => $h->{$_}->{commits},
+  } } sort keys %$h;
+}
+
+sub rip_log {
+  my ( $days ) = @_;
+
   my $days_less_one = $days - 1;
 
   my $disco     = DateTime->new ( year => 1970, month => 1, day => 1 );
@@ -60,14 +73,7 @@ sub day_wise_commits {
     };
   }
 
-  fill_in ( $days => $h );
-
-  return map { {
-    ymd     => $_, 
-    dow     => $h->{$_}->{dow},
-    count   => $h->{$_}->{commits} ? scalar @{$h->{$_}->{commits}} : 0,
-   #commits => $h->{$_}->{commits},
-  } } sort keys %$h;
+  return $h;
 }
 
 sub fill_in {
