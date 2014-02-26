@@ -60,15 +60,7 @@ sub day_wise_commits {
     };
   }
 
-  {
-    my $dt = DateTime->now;
-    
-    for ( 1 .. $days ) {
-      $h->{$dt->ymd}->{dow} = $dt->day_name;
-
-      $dt->add ( days => -1 );
-    }
-  }
+  fill_in ( $days => $h );
 
   return map { {
     ymd     => $_, 
@@ -76,4 +68,18 @@ sub day_wise_commits {
     count   => $h->{$_}->{commits} ? scalar @{$h->{$_}->{commits}} : 0,
    #commits => $h->{$_}->{commits},
   } } sort keys %$h;
+}
+
+sub fill_in {
+  my ( $days, $h ) = @_;
+
+  my $dt = DateTime->now;
+  
+  for ( 1 .. $days ) {
+    $h->{$dt->ymd}->{dow} = $dt->day_name;
+
+    $dt->add ( days => -1 );
+  }
+
+  return $h;
 }
