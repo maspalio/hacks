@@ -34,11 +34,13 @@ print + JSON::XS->new->pretty(1)->encode ( \@commits );
 
 sub day_wise_commits {
   my ( $days ) = @_;
+  
+  my $days_less_one = $days - 1;
 
-  my $dt0       = DateTime->new ( year => 1970, month => 1, day => 1 );
-  my $formatter = DateTime::Format::Epoch->new ( epoch => $dt0 );
+  my $disco     = DateTime->new ( year => 1970, month => 1, day => 1 );
+  my $formatter = DateTime::Format::Epoch->new ( epoch => $disco );
 
-  open my $fh, qq{ git log --since="$days days ago" --until="now" --format="%h,%aN,%ct,%s" | } or die;
+  open my $fh, qq{ git log --since="$days_less_one days ago" --until="now" --format="%h,%aN,%ct,%s" | } or die;
 
   my $h;
 
@@ -61,16 +63,14 @@ sub day_wise_commits {
   {
     my $dt = DateTime->now;
     
-    for ( 1 .. $days ) {    
-      my $ymd = $dt->ymd;
-
-      $h->{$ymd}->{dow} = $dt->day_name;
+    for ( 1 .. $days ) {
+      $h->{$dt->ymd}->{dow} = $dt->day_name;
 
       $dt->add ( days => -1 );
     }
   }
 
-  return @commits = map { {
+  return map { {
     ymd     => $_, 
     dow     => $h->{$_}->{dow},
     count   => $h->{$_}->{commits} ? scalar @{$h->{$_}->{commits}} : 0,
